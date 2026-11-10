@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meine Bücher</title>
+<style>
+:root{--bg:#faf8f4;--card:#fff;--tx:#222;--mu:#777;--ac:#8a4b2a;--ac2:#f1e4da;--bd:#e6e0d8;--st:#e8a317;--er:#b3261e;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#1b1917;--card:#262321;--tx:#eee;--mu:#a59d95;--ac:#e0996f;--ac2:#3a2e27;--bd:#38332f;--er:#f2b8b5}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#1b1917;--card:#262321;--tx:#eee;--mu:#a59d95;--ac:#e0996f;--ac2:#3a2e27;--bd:#38332f;--er:#f2b8b5}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:640px;margin:0 auto;padding:12px 14px 96px}
+header{display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px}
+h1{font-size:1.4rem;margin:0}
+button,select,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:1px solid var(--bd);background:var(--card);border-radius:10px;padding:8px 12px}
+button.pri{background:var(--ac);color:#fff;border-color:var(--ac)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}
+.tabs button{flex:1;padding:10px}
+.tabs button.on{background:var(--ac2);border-color:var(--ac);font-weight:600}
+.bar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.bar input,.bar select{padding:8px;border:1px solid var(--bd);border-radius:10px;background:var(--card)}
+.bar input{flex:1 1 100%}.bar select{flex:1}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:8px}
+.card h3{margin:0;font-size:1.05rem}.mu{color:var(--mu);font-size:.9rem}
+.stars{color:var(--st);letter-spacing:2px}
+.notes{margin:6px 0 0;font-size:.92rem;white-space:pre-wrap}
+.acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}.acts button{font-size:.85rem;padding:6px 10px}
+.fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:56px;height:56px;border-radius:50%;font-size:28px;padding:0;box-shadow:0 2px 8px #0004}
+dialog{width:min(520px,94vw);border:1px solid var(--bd);border-radius:14px;background:var(--card);color:var(--tx);padding:16px}
+dialog::backdrop{background:#0006}
+label{display:block;margin:10px 0 3px;font-size:.88rem;color:var(--mu)}
+dialog input[type=text],dialog input[type=date],dialog textarea{width:100%;padding:9px;border:1px solid var(--bd);border-radius:10px;background:var(--bg)}
+textarea{min-height:90px}
+.row{display:flex;gap:6px;margin-top:14px;justify-content:flex-end;flex-wrap:wrap}
+.pick{display:flex;gap:6px}.pick button{flex:1}.pick button.on{background:var(--ac2);border-color:var(--ac);font-weight:600}
+.starin button{border:0;background:none;font-size:1.7rem;padding:0 4px;color:var(--bd)}.starin button.on{color:var(--st)}
+.err{color:var(--er);font-size:.9rem;margin-top:8px;min-height:1.2em}
+.empty{text-align:center;color:var(--mu);padding:30px 0}
+</style>
+</head>
+<body>
+<main>
+<header><h1>📚 Meine Bücher</h1><button id="dataBtn">Daten</button></header>
+<div class="tabs"><button id="tabT"></button><button id="tabH"></button></div>
+<div class="bar">
+<input id="q" type="search" placeholder="Suchen (Titel, Autor, ISBN, Notizen)">
+<select id="sort"><option value="added">Zuletzt hinzugefügt</option><option value="title">Titel A–Z</option><option value="author">Autor A–Z</option><option value="rating">Bewertung</option></select>
+<select id="flt"><option value="0">Alle Bewertungen</option><option value="3">ab 3 Sternen</option><option value="4">ab 4 Sternen</option><option value="5">nur 5 Sterne</option></select>
+</div>
+<div id="list"></div>
+</main>
+<button class="fab pri" id="add" aria-label="Buch hinzufügen">+</button>
+
+<dialog id="dlg"><div id="dbody"></div></dialog>
+<dialog id="dask"><p id="amsg"></p><div class="row"><button id="ano">Abbrechen</button><button class="pri" id="ayes">OK</button></div></dialog>
+<dialog id="ddata">
+<strong>Daten sichern</strong>
+<label>Export (JSON) – kopieren und z. B. in einer Notiz speichern</label>
+<textarea id="exp" readonly></textarea>
+<div class="row"><button id="copy">Kopieren</button></div>
+<label>Import (JSON einfügen oder Datei wählen)</label>
+<textarea id="imp"></textarea>
+<input type="file" id="file" accept=".json,application/json">
+<div class="err" id="ierr"></div>
+<div class="row"><button id="merge">Zusammenführen</button><button id="repl">Ersetzen</button><button id="dclose">Schließen</button></div>
+</dialog>
+
+<script>
+class Book{
+  constructor(o){this.id=o.id||(Date.now().toString(36)+Math.random().toString(36).slice(2,6));
+    this.title=String(o.title||'').trim();this.author=String(o.author||'').trim();
+    this.isbn=String(o.isbn||'').replace(/[\s-]/g,'').toUpperCase();
+    const r=Number(o.rating);this.rating=r>=1&&r<=5?Math.round(r):null;
+    this.finished=o.finished||'';this.notes=o.notes||'';this.added=o.added||Date.now();}
+}
+class BookList{
+  constructor(){this.books=[];}
+  add(b){this.books.push(b);}
+  get(id){return this.books.find(b=>b.id===id);}
+  remove(id){const i=this.books.findIndex(b=>b.id===id);return i<0?null:this.books.splice(i,1)[0];}
+}
+class ToRead extends BookList{}
+class HaveRead extends BookList{}
+
+class Library{
+  constructor(){this.toRead=new ToRead();this.haveRead=new HaveRead();}
+  list(n){return n==='toRead'?this.toRead:this.haveRead;}
+  find(id){for(const n of['toRead','haveRead']){const b=this.list(n).get(id);if(b)return{b,n};}return null;}
+  dup(isbn,exceptId){return isbn?[...this.toRead.books,...this.haveRead.books].find(b=>b.isbn===isbn&&b.id!==exceptId):null;}
+  add(b,n){this.remove(b.id);this.list(n).add(b);}          // nie in beiden Listen
+  move(id,to){const f=this.find(id);if(!f||f.n===to)return;const b=this.list(f.n).remove(id);
+    if(to==='toRead'){b.rating=null;b.finished='';}else if(!b.finished){b.finished=new Date().toISOString().slice(0,10);}
+    this.list(to).add(b);}
+  remove(id){const f=this.find(id);if(f)this.list(f.n).remove(id);}
+  toJSON(){return{version:1,toRead:this.toRead.books,haveRead:this.haveRead.books};}
+  load(d,merge){
+    if(!d||!Array.isArray(d.toRead)||!Array.isArray(d.haveRead))throw new Error('Ungültiges Format: toRead und haveRead fehlen.');
+    if(!merge){this.toRead=new ToRead();this.haveRead=new HaveRead();}
+    for(const n of['toRead','haveRead'])for(const o of d[n]){
+      const b=new Book(o);if(!b.title)continue;
+      if(this.find(b.id)||this.dup(b.isbn,b.id))continue;
+      if(this.toRead.get(b.id)||this.haveRead.get(b.id))continue;
+      this.list(n).add(b);}
+  }
+}
+const KEY='buecher-v1',lib=new Library();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(lib));}catch(e){}}
+try{const s=localStorage.getItem(KEY);if(s)lib.load(JSON.parse(s),false);}catch(e){}
+
+function isbnOk(s){
+  if(!s)return true;
+  if(/^\d{9}[\dX]$/.test(s)){let t=0;for(let i=0;i<10;i++)t+=(10-i)*(s[i]==='X'?10:+s[i]);return t%11===0;}
+  if(/^\d{13}$/.test(s)){let t=0;for(let i=0;i<13;i++)t+=+s[i]*(i%2?3:1);return t%10===0;}
+  return false;
+}
+const $=id=>document.getElementById(id);
+function ask(msg,ok){return new Promise(res=>{$('amsg').textContent=msg;$('ayes').textContent=ok||'OK';const d=$('dask');let r=false;
+  const done=v=>{r=true;d.close();res(v);};$('ayes').onclick=()=>done(true);$('ano').onclick=()=>done(false);
+  d.onclose=()=>{if(!r)res(false);};d.showModal();});}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let tab='toRead';
+
+function render(){
+  $('tabT').textContent='Zu lesen ('+lib.toRead.books.length+')';
+  $('tabH').textContent='Gelesen ('+lib.haveRead.books.length+')';
+  $('tabT').classList.toggle('on',tab==='toRead');$('tabH').classList.toggle('on',tab==='haveRead');
+  $('flt').style.display=tab==='haveRead'?'':'none';
+  const q=$('q').value.trim().toLowerCase(),s=$('sort').value,f=tab==='haveRead'?+$('flt').value:0;
+  let bs=lib.list(tab).books.filter(b=>(!q||[b.title,b.author,b.isbn,b.notes].join(' ').toLowerCase().includes(q))&&(!f||(b.rating||0)>=f));
+  const cmp={added:(a,b)=>b.added-a.added,title:(a,b)=>a.title.localeCompare(b.title,'de'),author:(a,b)=>a.author.localeCompare(b.author,'de')||a.title.localeCompare(b.title,'de'),rating:(a,b)=>(b.rating||0)-(a.rating||0)||a.title.localeCompare(b.title,'de')};
+  bs.sort(cmp[s]);
+  $('list').innerHTML=bs.length?bs.map(b=>`<div class="card"><h3>${esc(b.title)}</h3><div class="mu">${esc(b.author||'Autor unbekannt')}${b.isbn?' · ISBN '+esc(b.isbn):''}</div>
+${b.rating?`<div class="stars">${'★'.repeat(b.rating)}${'☆'.repeat(5-b.rating)}</div>`:''}${b.finished?`<div class="mu">Gelesen am ${new Date(b.finished).toLocaleDateString('de-DE')}</div>`:''}
+${b.notes?`<div class="notes">${esc(b.notes)}</div>`:''}
+<div class="acts"><button data-a="move" data-id="${b.id}">${tab==='toRead'?'Als gelesen markieren':'Zurück zu „Zu lesen“'}</button><button data-a="edit" data-id="${b.id}">Bearbeiten</button><button data-a="del" data-id="${b.id}">Löschen</button></div></div>`).join(''):
+  `<div class="empty">${lib.list(tab).books.length?'Keine Treffer.':'Noch keine Bücher in dieser Liste.'}</div>`;
+}
+
+function openForm(id,forceTo){
+  const f=id?lib.find(id):null,b=f?f.b:new Book({});let to=f?f.n:(forceTo||tab),rating=b.rating;
+  const draw=()=>{
+    $('dbody').innerHTML=`<strong>${f?'Buch bearbeiten':'Neues Buch'}</strong>
+${f?'':`<label>Liste</label><div class="pick"><button data-to="toRead" class="${to==='toRead'?'on':''}">Zu lesen</button><button data-to="haveRead" class="${to==='haveRead'?'on':''}">Gelesen</button></div>`}
+<label>Titel *</label><input type="text" id="fT" value="${esc(b.title)}">
+<label>Autor</label><input type="text" id="fA" value="${esc(b.author)}">
+<label>ISBN (10 oder 13 Ziffern)</label><input type="text" id="fI" inputmode="text" value="${esc(b.isbn)}">
+${to==='haveRead'?`<label>Bewertung (nochmal tippen = löschen)</label><div class="starin">${[1,2,3,4,5].map(i=>`<button data-s="${i}" class="${rating>=i?'on':''}">★</button>`).join('')}</div>
+<label>Gelesen am</label><input type="date" id="fD" value="${esc(b.finished)}">`:''}
+<label>Notizen</label><textarea id="fN">${esc(b.notes)}</textarea>
+<div class="err" id="ferr"></div>
+<div class="row"><button id="fc">Abbrechen</button><button class="pri" id="fs">Speichern</button></div>`;
+  };
+  const keep=()=>{b.title=$('fT').value;b.author=$('fA').value;b.isbn=$('fI').value.replace(/[\s-]/g,'').toUpperCase();b.notes=$('fN').value;if($('fD'))b.finished=$('fD').value;};
+  draw();
+  $('dbody').onclick=async e=>{const t=e.target.closest('button');if(!t)return;
+    if(t.dataset.to){keep();to=t.dataset.to;draw();}
+    else if(t.dataset.s){keep();const v=+t.dataset.s;rating=rating===v?null:v;draw();}
+    else if(t.id==='fc')$('dlg').close();
+    else if(t.id==='fs'){keep();
+      if(!b.title.trim())return $('ferr').textContent='Bitte einen Titel eingeben.';
+      if(!isbnOk(b.isbn))return $('ferr').textContent='Diese ISBN ist ungültig (Prüfziffer stimmt nicht).';
+      const d=lib.dup(b.isbn,b.id);
+      if(d&&!await ask('Ein Buch mit dieser ISBN existiert schon: „'+d.title+'“. Trotzdem speichern?','Trotzdem speichern'))return;
+      b.title=b.title.trim();b.author=b.author.trim();b.rating=to==='haveRead'?rating:null;if(to==='toRead')b.finished='';
+      lib.add(b,to);save();tab=to;$('dlg').close();render();}
+  };
+  $('dlg').showModal();
+}
+
+$('tabT').onclick=()=>{tab='toRead';render();};
+$('tabH').onclick=()=>{tab='haveRead';render();};
+$('q').oninput=$('sort').onchange=$('flt').onchange=render;
+$('add').onclick=()=>openForm();
+$('list').onclick=async e=>{const t=e.target.closest('button');if(!t)return;const id=t.dataset.id;
+  if(t.dataset.a==='edit')openForm(id);
+  else if(t.dataset.a==='del'){if(await ask('Dieses Buch wirklich löschen?','Löschen')){lib.remove(id);save();render();}}
+  else if(t.dataset.a==='move'){
+    if(tab==='toRead'){lib.move(id,'haveRead');save();render();openForm(id);}
+    else{const b=lib.haveRead.get(id);if(!b.rating||await ask('Bewertung und Lesedatum gehen beim Zurückschieben verloren. Fortfahren?','Zurückschieben')){lib.move(id,'toRead');save();render();}}}
+};
+$('dataBtn').onclick=()=>{$('exp').value=JSON.stringify(lib,null,2);$('imp').value='';$('ierr').textContent='';$('ddata').showModal();};
+$('dclose').onclick=()=>$('ddata').close();
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('exp').value);$('copy').textContent='Kopiert ✓';}catch(e){$('exp').select();$('copy').textContent='Markiert – bitte manuell kopieren';}};
+$('file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{$('imp').value=r.result;};r.readAsText(f);};
+async function doImport(merge){
+  try{const d=JSON.parse($('imp').value);
+    if(!merge&&!await ask('Alle aktuellen Bücher werden durch den Import ersetzt. Fortfahren?','Ersetzen'))return;
+    lib.load(d,merge);save();render();$('ddata').close();}
+  catch(e){$('ierr').textContent='Import fehlgeschlagen: '+e.message;}
+}
+$('merge').onclick=()=>doImport(true);$('repl').onclick=()=>doImport(false);
+render();
+</script>
+</body>
+</html>
